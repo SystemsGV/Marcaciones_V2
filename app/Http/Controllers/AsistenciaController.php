@@ -37,14 +37,12 @@ class AsistenciaController extends Controller
         $fechaFin = Carbon::parse($request->fechaFin)->endOfDay();
 
         $user = $request->user();
-        $isJefe = $user->rol_id == 4;
         $isSupervisor = $user->rol_id == 5;
 
-        $empresas = $isSupervisor
-            ? $user->empresasAsignadas()->where('estado', 1)->get(['id', 'razonsocial'])
-            : Empresa::where('estado', 1)->get(['id', 'razonsocial']);
-
+        // Empresas y encargados
         if ($isSupervisor) {
+            $empresas = $user->empresasAsignadas()->where('estado', 1)->get(['id', 'razonsocial']);
+
             $empleadosAsignadosIds = $user->empleadosACargo()
                 ->when($request->empresa, function ($q) use ($request) {
                     $q->where('supervisor_empleado.empresa_id', $request->empresa);
@@ -53,22 +51,18 @@ class AsistenciaController extends Controller
 
             $encargados = User::with('empleado')
                 ->where('estado', true)
-                ->whereHas('empleado', function ($q) use ($empleadosAsignadosIds) {
-                    $q->whereIn('id', $empleadosAsignadosIds);
-                })
-                ->get()
-                ->sortBy(fn($u) => $u->empleado->apellidos)
-                ->values();
-        } elseif ($isJefe) {
-            $encargados = User::with('empleado')
-                ->where('estado', true)
-                ->whereHas('empleado', function ($q) use ($user) {
-                    $q->where('jefe_id', $user->empleado_id);
+                ->whereHas('empleado', function ($q) use ($empleadosAsignadosIds, $request) {
+                    $q->whereIn('id', $empleadosAsignadosIds)
+                        ->when($request->empresa, function ($query) use ($request) {
+                            $query->where('empresa_id', $request->empresa);
+                        });
                 })
                 ->get()
                 ->sortBy(fn($u) => $u->empleado->apellidos)
                 ->values();
         } else {
+            // Para Jefe y otros roles (funciona como antes)
+            $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
             $encargados = User::with('empleado')
                 ->where('estado', true)
                 ->get()
@@ -76,30 +70,22 @@ class AsistenciaController extends Controller
                 ->values();
         }
 
+        // Query de asistencias
         $asistenciasQuery = Asistencia::query()
-            ->with(['empleado.area', 'empleado.empresa'])
+            ->with(['empleado.area'])
             ->whereBetween('fecha', [$fechaInicio, $fechaFin])
-            ->when($request->empresa, function ($q) use ($request) {
-                $q->whereHas('empleado', function ($e) use ($request) {
-                    $e->where('empresa_id', $request->empresa);
-                });
-            });
+            ->when($request->empresa, fn($q) => $q->where('empresa_id', $request->empresa))
+            ->when($request->encargado, fn($q) => $q->where('empleado_id', $request->encargado));
 
-        if ($request->encargado && !$isSupervisor) {
-            $asistenciasQuery->where('empleado_id', $request->encargado);
-        }
-
+        // Solo para Supervisor: restringir a empleados asignados
         if ($isSupervisor) {
-            $empleadosAsignadosIds = $user->empleadosACargo()->pluck('empleados.id');
+            $empleadosAsignadosIds = $user->empleadosACargo()
+                ->when($request->empresa, function ($q) use ($request) {
+                    $q->where('supervisor_empleado.empresa_id', $request->empresa);
+                })
+                ->pluck('empleados.id');
 
-            $asistenciasQuery->whereHas('detalles', function ($q) use ($empleadosAsignadosIds) {
-                $q->whereIn('empleado_id', $empleadosAsignadosIds);
-            });
-        }
-
-        if ($isJefe) {
-            $asistenciasQuery->whereHas('empleado', fn($q) => $q->where('jefe_  id', $user->empleado_id))
-                ->whereDoesntHave('detalles', fn($q) => $q->where('empleado_id', $user->empleado_id));
+            $asistenciasQuery->whereIn('empleado_id', $empleadosAsignadosIds);
         }
 
         $asistencias = $asistenciasQuery
