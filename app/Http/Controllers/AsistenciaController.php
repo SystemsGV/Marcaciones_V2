@@ -6,6 +6,7 @@ use App\Exports\MarcacionExport;
 use App\Jobs\CrearNotificacionAsistencia;
 use App\Models\Asistencia;
 use App\Models\AsistenciaDetalle;
+use App\Models\Empleado;
 use App\Models\Empresa;
 use App\Models\Horario;
 use App\Models\Marcacion;
@@ -37,12 +38,20 @@ class AsistenciaController extends Controller
         $fechaFin = Carbon::parse($request->fechaFin)->endOfDay();
 
         $user = $request->user();
+        $isJefe = $user->rol_id == 4;
         $isSupervisor = $user->rol_id == 5;
 
-        // Empresas y encargados
-        if ($isSupervisor) {
-            $empresas = $user->empresasAsignadas()->where('estado', 1)->get(['id', 'razonsocial']);
+        // ============================================
+        // EMPRESAS
+        // ============================================
+        $empresas = $isSupervisor
+            ? $user->empresasAsignadas()->where('estado', 1)->get(['id', 'razonsocial'])
+            : Empresa::where('estado', 1)->get(['id', 'razonsocial']);
 
+        // ============================================
+        // ENCARGADOS
+        // ============================================
+        if ($isSupervisor) {
             $empleadosAsignadosIds = $user->empleadosACargo()
                 ->when($request->empresa, function ($q) use ($request) {
                     $q->where('supervisor_empleado.empresa_id', $request->empresa);
@@ -51,41 +60,77 @@ class AsistenciaController extends Controller
 
             $encargados = User::with('empleado')
                 ->where('estado', true)
-                ->whereHas('empleado', function ($q) use ($empleadosAsignadosIds, $request) {
-                    $q->whereIn('id', $empleadosAsignadosIds)
-                        ->when($request->empresa, function ($query) use ($request) {
-                            $query->where('empresa_id', $request->empresa);
-                        });
+                ->whereHas('empleado', function ($q) use ($empleadosAsignadosIds) {
+                    $q->whereIn('id', $empleadosAsignadosIds);
+                })
+                ->get()
+                ->sortBy(fn($u) => $u->empleado->apellidos)
+                ->values();
+        } elseif ($isJefe) {
+            $encargados = User::with('empleado')
+                ->where('estado', true)
+                ->whereHas('empleado', function ($q) use ($user) {
+                    $q->where('jefe_id', $user->empleado_id);
                 })
                 ->get()
                 ->sortBy(fn($u) => $u->empleado->apellidos)
                 ->values();
         } else {
-            // Para Jefe y otros roles (funciona como antes)
-            $empresas = Empresa::where('estado', 1)->get(['id', 'razonsocial']);
             $encargados = User::with('empleado')
                 ->where('estado', true)
+                ->when($request->empresa, function ($q) use ($request) {
+                    $q->whereHas('empleado', function ($subQ) use ($request) {
+                        $subQ->where('empresa_id', $request->empresa);
+                    });
+                })
                 ->get()
                 ->sortBy(fn($u) => $u->empleado->apellidos)
                 ->values();
         }
 
-        // Query de asistencias
+        // ============================================
+        // ASISTENCIAS
+        // ============================================
         $asistenciasQuery = Asistencia::query()
-            ->with(['empleado.area'])
+            ->with(['empleado.area', 'empleado.empresa'])
             ->whereBetween('fecha', [$fechaInicio, $fechaFin])
-            ->when($request->empresa, fn($q) => $q->where('empresa_id', $request->empresa))
-            ->when($request->encargado, fn($q) => $q->where('empleado_id', $request->encargado));
+            ->when($request->empresa, function ($q) use ($request) {
+                $q->where('empresa_id', $request->empresa);
+            });
 
-        // Solo para Supervisor: restringir a empleados asignados
-        if ($isSupervisor) {
-            $empleadosAsignadosIds = $user->empleadosACargo()
-                ->when($request->empresa, function ($q) use ($request) {
-                    $q->where('supervisor_empleado.empresa_id', $request->empresa);
+        // Filtro por encargado según el rol
+        if ($request->encargado) {
+            if ($isSupervisor) {
+                // SUPERVISOR: Obtener IDs de empleados a cargo del supervisor
+                $empleadosACargo = $user->empleadosACargo()
+                    ->when($request->empresa, function ($q) use ($request) {
+                        $q->where('supervisor_empleado.empresa_id', $request->empresa);
+                    })
+                    ->pluck('empleados.id');
+
+                // Filtrar asistencias donde CUALQUIERA de los empleados a cargo esté en los detalles
+                $asistenciasQuery->whereHas('detalles', function ($q) use ($empleadosACargo) {
+                    $q->whereIn('empleado_id', $empleadosACargo);
+                });
+            } elseif ($isJefe) {
+                // JEFE: Filtrar por empleado_id directamente
+                $asistenciasQuery->where('empleado_id', $request->encargado);
+            } else {
+                // ADMIN: Filtrar por empleado_id directamente
+                $asistenciasQuery->where('empleado_id', $request->encargado);
+            }
+        }
+
+        // Filtro especial para Jefe en empresas permitidas
+        $empresasJefePermitidas = [4, 10, 11];
+        if ($isJefe && $request->empresa && in_array($request->empresa, $empresasJefePermitidas)) {
+            $asistenciasQuery
+                ->whereHas('empleado', function ($q) use ($user) {
+                    $q->where('jefe_id', $user->empleado_id);
                 })
-                ->pluck('empleados.id');
-
-            $asistenciasQuery->whereIn('empleado_id', $empleadosAsignadosIds);
+                ->whereDoesntHave('detalles', function ($q) use ($user) {
+                    $q->where('empleado_id', $user->empleado_id);
+                });
         }
 
         $asistencias = $asistenciasQuery
@@ -108,8 +153,6 @@ class AsistenciaController extends Controller
             'rechazados' => $asistencias->get('rechazados', collect()),
         ]);
     }
-
-
     public function store(Request $request)
     {
         $data = $request->validate([
