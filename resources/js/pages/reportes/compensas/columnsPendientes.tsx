@@ -79,6 +79,17 @@ export const columnsPendientes: ColumnDef<Pendiente>[] = [
         header: 'FERIADOS',
         cell: ({ row }) => {
             const feriados = row.original.feriados;
+
+            // 1. Verificar si el array de feriados está vacío
+            if (feriados.length === 0) {
+                return (
+                    <span className="text-center block">
+                        Sin feriado disponible
+                    </span>
+                );
+            }
+
+            // 2. Si hay feriados, procede a mapearlos (lógica original)
             return (
                 <div className="flex flex-col gap-1 font-semibold">
                     {feriados.map((feriado, index) => (
@@ -95,9 +106,10 @@ export const columnsPendientes: ColumnDef<Pendiente>[] = [
         header: 'TD',
         cell: ({ row }) => {
             const tds = row.original.permisos_td;
+            const tdsPendientes = tds.filter(td => td.estado === 0);
             return (
                 <div className="felx-col flex gap-1 font-semibold">
-                    {tds.map((td, index) => (
+                    {tdsPendientes.map((td, index) => (
                         <span key={index}>{format(td.fecha, 'dd/MM/yyyy')}</span>
                     ))}
                 </div>

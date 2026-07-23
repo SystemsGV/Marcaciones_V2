@@ -21,13 +21,18 @@ class Horario extends Model
         'descripcion',
         'estado',
         'validado',
+        'calculo_manual',
+        'destino_compensacion',
+        'fecha_compensacion',
+        'extra_consumido',
+        'aprobado_93h' ,
     ];
 
     protected function casts(): array
     {
         return [
             'fecha' => 'date',
-            'extra' => 'datetime:H:i',
+            //'extra' => 'datetime:H:i',
             'ingreso' => 'datetime:H:i',
             'salida' => 'datetime:H:i',
         ];

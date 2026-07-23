@@ -17,6 +17,7 @@ import { FormEventHandler, useEffect, useState } from 'react';
 import { Label as LabelChart, PolarRadiusAxis, RadialBar, RadialBarChart } from 'recharts';
 import { toast } from 'sonner';
 
+
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Horarios',
@@ -41,7 +42,7 @@ const estadoOptions = [
     { value: 'V', label: 'VACACIONES' },
     { value: 'M', label: 'DESCANSO MEDICO' },
     { value: 'SN', label: 'SUSPENSIÓN POR NEGLIGENCIA' },
-    { value: 'ST', label: 'SUSP. POR ACUMULACION DE TARDANZAS' },
+    { value: 'ST', label: 'SUSP. POR ACUMULACION DE AMONESTACIONES' },
     { value: 'SFI', label: 'SUSP. POR FALTA INJUSTIFICADA' },
     { value: 'FI', label: 'FALTA INJUSTIFICADA' },
     { value: 'FJ', label: 'FALTA JUSTIFICADA' },
@@ -51,6 +52,7 @@ const estadoOptions = [
     { value: 'LM', label: 'LICENCIA POR MATERNIDAD' },
     { value: 'LF', label: 'LICENCIA POR FALLECIMIENTO' },
     { value: 'PE', label: 'PENDIENTE' },
+    { value: 'TD', label: 'TRABAJO DIA DESCANSO' },
 ];
 
 type HorarioForm = {
@@ -64,13 +66,21 @@ type HorarioForm = {
     extras?: string;
 };
 
+
+type Feriado = { id: number | string; fecha: string; nombre: string };
+type Empleado = { id: number, jornada_id: number, horas_semanal_trabajadas?: number, horas?: number, horas_trabajadas?: number };
+type Horario = { id: number, empleado_id: number, fecha: string, ingreso: string, salida: string, estado: string, descripcion: string };
+type HorarioData = { ingreso: string, salida: string, estado: string, feriado: string, extras: string, descripcion: string };
+type SharedData = { auth: any };
+type ChartConfig = { [key: string]: { label: string, color: string } };
+
 const formatHours = (hours: number | false): string => {
-  if (typeof hours !== 'number') return '-';
+    if (typeof hours !== 'number') return '-';
 
-  const wholeHours = Math.floor(hours);
-  const minutes = Math.round((hours - wholeHours) * 60);
+    const wholeHours = Math.floor(hours);
+    const minutes = Math.round((hours - wholeHours) * 60);
 
-  return `${String(wholeHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    return `${String(wholeHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 };
 
 const formatMinutes = (minutes: number | false): string => {
@@ -82,32 +92,46 @@ const formatMinutes = (minutes: number | false): string => {
     return `${String(hours).padStart(2, '0')}:${String(remainingMinutes).padStart(2, '0')}`;
 };
 
-const FeriadoInfo = ({ feriado, tipo }: { feriado: Feriado[]; tipo: string }) => {
+// Función auxiliar para encontrar el día más antiguo (aplicable a Feriados y Permisos TD)
+const getDiaMasAntiguo = (dias: Feriado[]): Feriado | undefined => {
+    if (!dias || dias.length === 0) return undefined;
+    return [...dias]
+        .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())[0];
+};
 
+const FeriadoInfo = ({ feriado, tipo }: { feriado: Feriado[]; tipo: string }) => {
     if (!feriado.length) {
         return (
-            <div className="text-red-500">
-                <p>No tiene feriados disponibles</p>
+            <div className="text-red-500 mt-4 p-3 bg-red-50 rounded-lg border border-red-200">
+                <p>
+                    {tipo === 'TD'
+                        ? '🚫 No tiene días de Permiso TD disponibles para consumir.'
+                        : '🚫 No tiene feriados disponibles para compensar.'
+                    }
+                </p>
             </div>
         );
     }
 
+
     // Filtrar datos según el tipo
-    const lista = tipo === 'CA' ? [feriado[0]] : feriado;
+    const lista = feriado;
 
     return (
-        <div className="col-span-1 space-y-6 sm:col-span-2">
+        <div className="col-span-1 space-y-6 sm:col-span-2 mt-4 p-4 border rounded-lg bg-gray-50 dark:bg-gray-800">
+            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                {tipo === 'TD' ? 'Días TD Disponibles' : 'Feriados Disponibles'}
+            </h4>
             <div className="grid gap-2">
                 {lista.map((item, index) => (
-                    <div key={index} className="text-teal-600">
+                    <div key={item.id} className="text-teal-600 dark:text-teal-400 text-sm">
                         <p>
-                            <strong>Nombre: </strong> {item.nombre}
+                            <strong>Referencia: </strong> {item.nombre}
                         </p>
                         <p>
-                            <strong>Fecha: </strong> {format(item.fecha, 'dd/MM/yyyy')}
+                            <strong>Fecha: </strong> <span className="font-medium">{format(new Date(item.fecha), 'dd/MM/yyyy')}</span>
                         </p>
-                        {/* Línea divisoria opcional entre elementos (excepto el último) */}
-                        {index < lista.length - 1 && <hr className="my-2 border-gray-200 dark:border-neutral-800" />}
+                        {index < lista.length - 1 && <hr className="my-2 border-gray-200 dark:border-neutral-700" />}
                     </div>
                 ))}
             </div>
@@ -126,8 +150,9 @@ const chartConfig = {
     },
 } satisfies ChartConfig;
 
-export default function EditHorario({ horario, empleado, feriadoDisponible, feriadoFuturo, url }:
-    { horario: Horario; empleado: Empleado; feriadoDisponible: Feriado[]; feriadoFuturo: Feriado[]; url: string }) {
+
+export default function EditHorario({ horario, empleado, feriadoDisponible, feriadoFuturo, diasTD, url }:
+    { horario: Horario; empleado: Empleado; feriadoDisponible: Feriado[]; feriadoFuturo: Feriado[]; diasTD: Feriado[]; url: string }) {
 
     const chartData = [{ horas: empleado.horas ?? 0, horas_trabajadas: empleado.horas_trabajadas ?? 0 }];
     const chartDataSemanal = [{ horas: empleado.jornada_id == 1 ? 48 : 23.5, horas_trabajadas: empleado.horas_semanal_trabajadas ? empleado.horas_semanal_trabajadas / 60 : 0 }];
@@ -141,48 +166,90 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
         salida: horario.salida,
         estado: horario.estado,
         descripcion: horario.descripcion || '',
-        feriado: '',
+        feriado: horario.feriado_id || '',
         extras: '',
     });
 
     const handleEstadoChange = (value: string) => {
+
+        // Validar que TD solo sea para full time
+        if (value === 'TD' && horario.empleado.jornada_id !== 1) {
+            toast.error('Esta opción solo aplica para personal full time');
+            return;
+        }
+
         setExcedente(false);
         const ingresoDate = parse(data.ingreso, 'HH:mm', Date());
         const salidaDate = parse(data.salida, 'HH:mm', Date());
 
         const horas = empleado.jornada_id == 1 ? 2880 : 1410; // si es full 48 horas semanalas, si es part 23.5(23:30) horas en numeros | valores en minutos
         // 8 horas laborables si es full, se resta 8 horas o 4 horas por la razon de que no se debe contabilizar las horas que estan en los impputs y solo contar la diferencia
-        const total = (differenceInMinutes(salidaDate, ingresoDate) -  60 - (empleado.jornada_id == 1 ? 480 : 240)); // valor en minutos
+        const total = (differenceInMinutes(salidaDate, ingresoDate) - 60 - (empleado.jornada_id == 1 ? 480 : 240)); // valor en minutos
         const total_semanal = empleado.horas_semanal_trabajadas ?? 0;
         let extras = '';
-
-        if (value == 'L' && total + total_semanal > horas) {
-            value = 'HE';
-            extras = formatMinutes(total + total_semanal - horas);
-            setExcedente(true);
-            toast.error('Estas excediente el total de horas permitidas en la semana', {
-                richColors: true,
-                position: 'top-center',
-                duration: 6000,
-            });
-        }
 
         setData('estado', value);
         setData('feriado', '');
         setData('extras', extras);
 
+        const getDiaMasAntiguo = (dias: Feriado[]) => {
+            // Ordena del más antiguo al más reciente y toma el primero (el que se debe consumir)
+            return [...dias]
+                .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())[0];
+        };
+
+        // 🔥 Integración: Agregamos 'TD' al mapa de selección automática
+        const diaMap = {
+            C: getDiaMasAntiguo(feriadoDisponible),
+            CA: getDiaMasAntiguo(feriadoFuturo),
+            TD: getDiaMasAntiguo(diasTD),
+        };
+
+        const selectedDia = diaMap[value as keyof typeof diaMap];
+
+        // 🔥 CORRECCIÓN CLAVE: Validamos que selectedDia exista Y que tenga un 'id' definido.
+        if (selectedDia && selectedDia.id !== undefined && selectedDia.id !== null) {
+            // Si es C/CA: se guarda el ID del FERIADO
+            // Si es TD: se guarda el ID del PERMISO TD (tipo 24, estado 0)
+            setData('feriado', selectedDia.id.toString());
+        }
+
+        const getFeriadoMasAntiguo = (feriados: Feriado[]) => {
+            return [...feriados]
+                .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())[0];
+        };
+
         // Actualizar feriado automáticamente según el estado
         const feriadoMap = {
-            C: feriadoDisponible[0],
-            CA: feriadoFuturo[0],
+            C: getFeriadoMasAntiguo(feriadoDisponible),  // ← Ahora sí el más antiguo
+            CA: getFeriadoMasAntiguo(feriadoFuturo),     // ← Ahora sí el más antiguo
         };
 
         const selectedFeriado = feriadoMap[value as keyof typeof feriadoMap];
         if (selectedFeriado) {
             setData('feriado', selectedFeriado.id.toString());
         }
+
+        // ... dentro de handleEstadoChange
+        if (value === 'C' || value === 'CA' || value === 'TD') {
+            if (selectedDia && selectedDia.id !== undefined && selectedDia.id !== null) {
+                // Éxito: Encontramos ID y lo asignamos.
+                setData('feriado', selectedDia.id.toString());
+            } else {
+                // Falla: No hay permisos/feriados disponibles.
+                // Esto evita que el campo 'feriado' se quede vacío, lo cual hace fallar la validación de Laravel.
+                setData('estado', horario.estado); // Revertir el cambio de estado
+                toast.error(`No hay ${value === 'TD' ? 'Permisos TD' : 'Feriados'} disponibles`);
+                return; // ¡Detener el proceso!
+            }
+        }
+
+        // Solo si todo salió bien, actualizamos el estado.
+        setData('estado', value);
     };
 
+
+    // ----------------------------------- CALCULAR EL INGRESO Y SALIDA
     useEffect(() => {
         const ingresoDate = parse(data.ingreso, 'HH:mm', Date());
         const salidaDate = parse(data.salida, 'HH:mm', Date());
@@ -190,41 +257,66 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
         // 2880 => 48 horas y 1410 => 23.5
         const horas = empleado.jornada_id == 1 ? 2880 : 1410; // si es full 48 horas semanalas, si es part 23.5(23:30) horas en numeros | valores en minutos
         // 8 horas laborables si es full, se resta 8 horas o 4 horas por la razon de que no se debe contabilizar las horas que estan en los impputs y solo contar la diferencia
-        const total = (differenceInMinutes(salidaDate, ingresoDate) -  60 - (empleado.jornada_id == 1 ? 480 : 240)); // valor en minutos
+        const total = (differenceInMinutes(salidaDate, ingresoDate) - 60 - (empleado.jornada_id == 1 ? 480 : 240)); // valor en minutos
         const total_semanal = empleado.horas_semanal_trabajadas ?? 0;
 
         setExcedente(false);
         setData('extras', '');
         setData('estado', data.estado == 'HE' ? 'L' : data.estado);
 
-        if (total + total_semanal > horas) {
-            setExcedente(true);
-            setData('estado', 'HE'); // lo enviamos en minutos
-            setData('extras', formatMinutes(total + total_semanal - horas)); // lo enviamos en formato horas
-            toast.error('Estas excediente el total de horas permitidas en la semana', {
-                richColors: true,
-                position: 'top-center',
-                duration: 6000,
-            });
-        }
-
     }, [data.ingreso, data.salida])
+
+    /*
+    useEffect(() => {
+        console.log("🟢 EMPLEADO DATA:", {
+            id: empleado.id,
+            horas_semanal_trabajadas: empleado.horas_semanal_trabajadas,
+            horas_trabajadas: empleado.horas_trabajadas,
+            jornada_id: empleado.jornada_id,
+            horas: empleado.horas
+        });
+
+        console.log("🟢 CHART DATA:", {
+            chartData,
+            chartDataSemanal
+        });
+
+        console.log("🟢 HORARIO ACTUAL:", {
+            id: horario.id,
+            fecha: horario.fecha,
+            ingreso: horario.ingreso,
+            salida: horario.salida,
+            estado: horario.estado,
+            descripcion: horario.descripcion
+        });
+    }, []);
+    */
+
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
         patch(route('horarios.update', horario.id), {
             preserveScroll: true,
             onError: (errors) => {
-                const messageError = errors.message && errors.message != '' ? errors.message : 'Ocurrio un error inesperado';
-                toast.error(messageError, {
+                // 🔥 CAMBIO TEMPORAL PARA DEBUGGEAR 🔥
+                console.error("ERRORES COMPLETOS DE LARAVEL:", errors);
+
+                // Intentar mostrar la clave 'message' o la primera validación de campo
+                const detailedMessage =
+                    errors.message ||
+                    (errors.feriado ? `(Feriado Error: ${errors.feriado})` : null) ||
+                    'Ocurrio un error inesperado. Revisa la consola para más detalles.';
+
+                toast.error(detailedMessage, { // Usa detailedMessage
                     richColors: true,
                     position: 'top-center',
-                    duration: 6000,
+                    duration: 9000, // Aumentamos la duración para poder leerlo
                 });
+                // 🔥 Vuelve a la versión anterior (solo errors.message) cuando esto funcione.
             },
-            // onFinish: () => reset()
         });
     };
+
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -234,7 +326,7 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
                 <div className="flex items-center justify-between gap-3">
                     <Button variant="ghost" asChild className='text-xl'>
                         <Link href={url} prefetch>
-                            <ArrowLeft/>
+                            <ArrowLeft />
                             Regresar
                         </Link>
                     </Button>
@@ -289,7 +381,7 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
                                             type="time"
                                             className="mt-1 block w-full"
                                             value={data.ingreso}
-                                            disabled={auth.user.rol_id == 4}
+                                            //disabled={auth.user.rol_id == 4}
                                             tabIndex={4}
                                             onChange={(e) => {
                                                 if (data.salida && e.target.value > data.salida) {
@@ -305,6 +397,10 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
                                         <InputError message={errors.ingreso} />
                                     </div>
 
+
+
+
+
                                     <div className="grid gap-2">
                                         <Label htmlFor="salida">HORA DE SALIDA</Label>
 
@@ -313,7 +409,7 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
                                             type="time"
                                             className="mt-1 block w-full"
                                             value={data.salida}
-                                            disabled={auth.user.rol_id == 4}
+                                            //disabled={auth.user.rol_id == 4}
                                             tabIndex={5}
                                             onChange={(e) => {
                                                 if (data.ingreso && e.target.value < data.ingreso) {
@@ -345,11 +441,14 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
                                         <InputError message={errors.descripcion} />
                                     </div>
 
+
+
+
                                     <div className="grid gap-2">
                                         <Label htmlFor="estado">ESTADO</Label>
 
                                         <Select
-                                            disabled={data.estado == 'PE' || data.estado == 'E'}
+                                            disabled={data.estado == 'PE' || data.estado == 'E' || auth.user.rol_id === 4 || auth.user.rol_id === 5}
                                             defaultValue={data.estado}
                                             autoComplete="estado"
                                             onValueChange={handleEstadoChange}
@@ -358,7 +457,11 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
                                                 <SelectValue placeholder="SELECCIONAR ESTADO" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {estadoOptions.filter(option => option.value !== 'SP' || horario.empleado.jornada_id === 2).map((option) => (
+                                                {estadoOptions.filter(option => {
+                                                    if (option.value === 'SP' && horario.empleado.jornada_id === 1) return false;
+                                                    if (option.value === 'TD' && horario.empleado.jornada_id !== 1) return false;
+                                                    return true;
+                                                }).map((option) => (
                                                     <SelectItem key={option.value} value={option.value} disabled={option.value === 'PE' || data.estado == 'E'}>
                                                         {option.label}
                                                     </SelectItem>
@@ -369,10 +472,35 @@ export default function EditHorario({ horario, empleado, feriadoDisponible, feri
                                         <InputError message={errors.estado} />
                                     </div>
 
-                                    {(data.estado === 'C' || data.estado === 'CA') && (
-                                        <FeriadoInfo feriado={data.estado === 'C' ? feriadoDisponible : feriadoFuturo} tipo={data.estado} />
+                                    {(data.estado === 'C' || data.estado === 'CA' || data.estado === 'TD') && (
+                                        <FeriadoInfo
+                                            feriado={
+                                                data.estado === 'C'
+                                                    ? [...feriadoDisponible].sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
+                                                    : data.estado === 'CA'
+                                                        ? [...feriadoFuturo].sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
+                                                        // Usamos diasTD cuando el estado es TD
+                                                        : [...diasTD].sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
+                                            }
+                                            tipo={data.estado}
+                                        />
                                     )}
                                 </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
                                 <div className="flex items-center gap-4">
                                     <Button type='submit' variant={excedente ? 'info' : 'default'} disabled={processing} tabIndex={8}>
                                         {processing && <LoaderCircle className="h-4 w-4 animate-spin" />}

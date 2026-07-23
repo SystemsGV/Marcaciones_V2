@@ -3,7 +3,7 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { SharedData, type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { Building2, ChartBarStacked, CircleMinus, CircleX, ClipboardPenLine, ClockArrowUp, LayoutGrid, NotebookPen, SquareDashedMousePointer, User, Users } from 'lucide-react';
+import { Building2, ChartBarStacked, CircleMinus, CircleX, ClipboardPenLine, ClockArrowUp, LayoutGrid, NotebookPen, SquareDashedMousePointer, User, Users, FileText } from 'lucide-react';
 import AppLogo from './app-logo';
 
 
@@ -12,6 +12,8 @@ const mainNavItems: NavItem[] = [
         title: 'Dashboard',
         href: route('dashboard'),
         icon: LayoutGrid,
+        permissions: [1, 2, 3, 4]
+
     },
     {
         title: 'Empleados',
@@ -35,7 +37,7 @@ const mainNavItems: NavItem[] = [
         title: 'Horarios',
         href: route('horarios.index'),
         icon: ClockArrowUp,
-        permissions: [1, 2, 4]
+        permissions: [1, 2, 4, 5]
     },
     {
         title: 'Permisos',
@@ -53,6 +55,11 @@ const mainNavItems: NavItem[] = [
                 href: route('permisos.extras'),
                 permissions: [1, 2]
             },
+             {
+                title: 'Solicitudes HS PT',
+                href: route('solicitudes-he-pt.rrhh'),
+                permissions: [1, 2]
+            },
         ],
 
     },
@@ -60,7 +67,7 @@ const mainNavItems: NavItem[] = [
         title: 'Marcaciones',
         href: '',
         icon: ClipboardPenLine,
-        permissions: [1, 2, 4],
+        permissions: [1, 2, 4, 5],
         items: [
             {
                 title: 'Asistencia general',
@@ -80,7 +87,7 @@ const mainNavItems: NavItem[] = [
             {
                 title: 'Validaciones',
                 href: route('asistencias.index'),
-                permissions: [1, 2, 4]
+                permissions: [1, 2, 4, 5]
             },
         ],
     },
@@ -94,12 +101,12 @@ const mainNavItems: NavItem[] = [
         title: 'Suspensiones',
         href: '',
         icon: CircleX,
-        permissions: [1, 2, 4],
+        permissions: [1, 2, 4, 5],
         items: [
             {
                 title: 'Lista general',
                 href: route('suspensiones.index'),
-                permissions: [1, 2, 4]
+                permissions: [1, 2, 4, 5]
             },
             {
                 title: 'Crear nuevo',
@@ -143,6 +150,12 @@ const mainNavItems: NavItem[] = [
             },
         ],
     },
+    {
+        title: 'Logs',
+        href: route('movimientos.index'),
+        icon: FileText,
+        permissions: [1, 2]
+    }
 ];
 
 export function AppSidebar() {

@@ -12,6 +12,7 @@ import { CalendarIcon } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { DateRange } from 'react-day-picker';
 import { columns } from './columns';
+import { columnsRevision } from './columnsRevision';
 import { LoadingSkeleton } from '@/components/loading-skeleton';
 import { Card, CardContent } from '@/components/ui/card';
 import { Encargado } from '@/types/encargados';
@@ -33,7 +34,9 @@ type Filters = {
     empresa?: number | null;
     encargado?: number | null;
     fechaInicio?: string;
+    modalidad?: number | null;
     fechaFin?: string;
+    area?: number | null; // <--- Agregado
 };
 
 export default function IndexHorasExtra({
@@ -43,12 +46,14 @@ export default function IndexHorasExtra({
     empresas,
     encargados,
     filters,
+    areas, // <--- Recibir desde Laravel
 }: {
     pendientes: ReporteExtra[];
     revision: ReporteExtra[];
     aprobados: ReporteExtra[];
     empresas: Empresa[];
     encargados: Encargado[];
+    areas: any[]; // <--- Definir el tipo según tu modelo
     filters: Filters;
 }) {
     const { auth } = usePage<SharedData>().props;
@@ -60,16 +65,26 @@ export default function IndexHorasExtra({
         dateRange:
             filters?.fechaInicio && filters?.fechaFin
                 ? {
-                      from: parseISO(filters.fechaInicio),
-                      to: parseISO(filters.fechaFin),
-                  }
+                    from: parseISO(filters.fechaInicio),
+                    to: parseISO(filters.fechaFin),
+                }
                 : undefined,
+        modalidad: filters.modalidad || null, //
+        areas: filters.areas || null, //
     };
 
     const [selectedEmpresa, setSelectedEmpresa] = useState<string | number | null>(initialState.empresa);
     const [selectedEncargado, setSelectedEncargado] = useState<string | number | null>(initialState.encargado);
     const [dateRange, setDateRange] = useState<DateRange | undefined>(initialState.dateRange);
     const [isFiltering, setIsFiltering] = useState(false);
+
+    //Selecto de modalidad
+    const [selectedModalidad, setSelectedModalidad] = useState<string | number | null>(filters.modalidad || null);
+    const jornadas = [
+        { id: 1, nombre: 'FULL TIME (FT)' },
+        { id: 2, nombre: 'PART TIME (PT)' }
+    ];
+    const [selectedArea, setSelectedArea] = useState<string | number | null>(filters.area || null);
 
     const applyFilters = useCallback(() => {
         router.get(
@@ -79,6 +94,8 @@ export default function IndexHorasExtra({
                 encargado: selectedEncargado,
                 fechaInicio: dateRange?.from?.toISOString().split('T')[0],
                 fechaFin: dateRange?.to?.toISOString().split('T')[0],
+                modalidad: selectedModalidad, // <--- Enviamos la modalidad
+                area: selectedArea,
             },
             {
                 preserveState: true,
@@ -86,22 +103,36 @@ export default function IndexHorasExtra({
                 onFinish: () => setIsFiltering(false),
             },
         );
-    }, [selectedEmpresa, selectedEncargado, dateRange]);
+    }, [selectedEmpresa, selectedEncargado, selectedModalidad, dateRange, selectedArea]); // <--- Agregado a dependencias
 
     const handleEmpresaChange = (empresaId: string | number | null) => {
         setSelectedEmpresa(empresaId);
         setSelectedEncargado(null); // Resetear área al cambiar de empresa
+        setSelectedEncargado(null);
+        setSelectedArea(null);
     };
-
+    useEffect(() => {
+        // Si es MILUSKA y no hay empresa seleccionada pero hay empresas disponibles
+        if (auth.user.id === 73 && !selectedEmpresa && empresas.length > 0) {
+            setSelectedEmpresa(empresas[0].id);
+        }
+    }, [empresas, selectedEmpresa, auth.user.name]);
     // carga automatica en tiempo real
     useEffect(() => {
-        if ((selectedEmpresa && dateRange?.to) || selectedEncargado) {
+        if ((selectedEmpresa && dateRange?.to) || selectedEncargado || selectedArea) {
             setIsFiltering(true);
             const timer = setTimeout(applyFilters, 200);
             return () => clearTimeout(timer);
         }
-    }, [selectedEmpresa, selectedEncargado, dateRange, applyFilters]);
+    }, [selectedEmpresa, selectedEncargado, dateRange, applyFilters, selectedArea]);
 
+
+    useEffect(() => {
+        // Si es MILUSKA y no hay empresa seleccionada pero hay empresas disponibles
+        if (auth.user.name === 'ANGELES TERRONES MILUSKA' && !selectedEmpresa && empresas.length > 0) {
+            setSelectedEmpresa(empresas[0].id);
+        }
+    }, [empresas, selectedEmpresa, auth.user.name]);
     // Componente para mostrar cuando no hay filtros
     const NoFiltersMessage = () => (
         <div className="flex flex-col items-center justify-center p-8">
@@ -161,6 +192,28 @@ export default function IndexHorasExtra({
                                 />
                             )}
 
+                            {auth.user.name === 'ANGELES TERRONES MILUSKA' && (
+                                <SelectFilter
+                                    items={empresas}
+                                    selected={selectedEmpresa}
+                                    onSelect={setSelectedEmpresa}
+                                    getValue={(empresa) => empresa.id}
+                                    displayValue={(empresa) => empresa.razonsocial}
+                                    placeholder="SELECCIONAR EMPRESA"
+                                />
+                            )}
+                            {auth.user.id === 73 && (
+                                <SelectFilter
+                                    items={empresas}
+                                    selected={selectedEmpresa}
+                                    onSelect={setSelectedEmpresa}
+                                    getValue={(empresa) => empresa.id}
+                                    displayValue={(empresa) => empresa.razonsocial}
+                                    placeholder="SELECCIONAR EMPRESA"
+                                />
+                            )}
+
+
                             <DateRangeFilter
                                 dateRange={dateRange}
                                 setDateRange={setDateRange}
@@ -177,13 +230,31 @@ export default function IndexHorasExtra({
                                     placeholder="SELECCIONAR ENCARGADO"
                                 />
                             )}
+
+                            <SelectFilter
+                                items={jornadas}
+                                selected={selectedModalidad}
+                                onSelect={setSelectedModalidad}
+                                getValue={(j) => j.id}
+                                displayValue={(j) => j.nombre}
+                                placeholder="SELECCIONAR MODALIDAD"
+                            />
+
+                            <SelectFilter
+                                items={areas}
+                                selected={selectedArea}
+                                onSelect={setSelectedArea}
+                                getValue={(area) => area.id}
+                                displayValue={(area) => area.nombre}
+                                placeholder="SELECCIONAR AREAS"
+                            />
                         </div>
                     </div>
 
                     <Tabs defaultValue={'pendientes'} className="flex flex-1 flex-col gap-6">
                         <TabsList className="w-full">
                             <TabsTrigger value="pendientes"> PENDIENTES </TabsTrigger>
-                            <TabsTrigger value="revision"> EN REVISION </TabsTrigger>
+                            <TabsTrigger value="revision"> HE USADAS </TabsTrigger>
                             <TabsTrigger value="aprobados"> APROBADOS </TabsTrigger>
                         </TabsList>
 
@@ -195,7 +266,10 @@ export default function IndexHorasExtra({
                                     ) : isFiltering ? (
                                         <LoadingSkeleton />
                                     ) : (
-                                        <DataTable key="datatable-reporte-horas-extra" columns={columns} data={pendientes} />
+                                        <DataTable key="datatable-reporte-horas-extra" columns={columns} data={pendientes} meta={{
+                                            fechaInicio: filters.fechaInicio,
+                                            fechaFin: filters.fechaFin
+                                        }} />
                                     )}
                                 </TabsContent>
 
@@ -205,7 +279,11 @@ export default function IndexHorasExtra({
                                     ) : isFiltering ? (
                                         <LoadingSkeleton />
                                     ) : (
-                                        <DataTable key="datatable-reporte-horas-extra" columns={columns} data={revision} />
+                                        <DataTable
+                                            key="datatable-reporte-extras-usados"
+                                            columns={columnsRevision}
+                                            data={revision}
+                                        />
                                     )}
                                 </TabsContent>
 
@@ -215,7 +293,10 @@ export default function IndexHorasExtra({
                                     ) : isFiltering ? (
                                         <LoadingSkeleton />
                                     ) : (
-                                        <DataTable key="datatable-reporte-horas-extra-adelantadas" columns={columns} data={aprobados} />
+                                        <DataTable key="datatable-reporte-horas-extra-adelantadas" columns={columns} data={aprobados} meta={{
+                                            fechaInicio: filters.fechaInicio,
+                                            fechaFin: filters.fechaFin
+                                        }} />
                                     )}
                                 </TabsContent>
                             </CardContent>

@@ -7,11 +7,12 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 
-type HorarioExtraProps  = {
+type HorarioExtraProps = {
     horarios: Horario[];
     extra: number;
     laboral: number;
     horarioExtra: Horario;
+    horas_por_dia: { [fecha: string]: number };
 } | null
 
 const estadoBadgeVariants = {
@@ -39,6 +40,11 @@ const estadoBadgeVariants = {
     PE: { label: 'PENDIENTE', variant: 'warning' },
     HENA: { label: 'H. EXTRA NO AUTORIZADO', variant: 'destructive' },
     AHE: { label: 'HORAS EXTRA', variant: 'info' },
+TD: { label: 'TRABAJÓ DIA DE DESCANSO', variant: 'info' },
+     AS: { label: 'APRB. SISTEMA', variant: 'destructive' },
+    AU: { label: 'APRB. USER', variant: 'success' },
+    RU: { label: 'RECHAZ. USER', variant: 'destructive' },
+    RS: { label: 'RECHAZ. SISTEMA', variant: 'success' },
 } as const;
 
 const formatMinutes = (minutes: number | false): string => {
@@ -59,8 +65,9 @@ export default function SearchHorario({ permisoId, jornada }: { permisoId: numbe
         fetch(route('permisos.showHorarios', { permiso: permisoId }))
             .then((res) => res.json())
             .then((data) => {
+                console.log('DATA RECIBIDA:', data); // 🆕 Ver qué manda el backend
                 setDataExtra(data);
-                setProcessing(false);
+                setProcessing(false); // 🆕 MOVER AQUÍ
             })
             .catch((error) => {
                 setProcessing(false);
@@ -89,11 +96,37 @@ export default function SearchHorario({ permisoId, jornada }: { permisoId: numbe
                                 {dataExtra.horarios.map((horario, index) => {
                                     const estado = horario.estado as keyof typeof estadoBadgeVariants;
                                     const badgeConfig = estadoBadgeVariants[estado] || { variant: "outline", label: estado };
+                                    let minutosDia = 0;
+
+                                    if (horario.estado === 'L') {
+                                        // Usar cálculo del backend para LABORAL
+                                        const fechaKey = horario.fecha.split('T')[0];
+                                        minutosDia = dataExtra.horas_por_dia[fechaKey] || 0;
+                                    }
+                                    else if (horario.estado === 'D') {
+                                        // DESCANSO → siempre 0
+                                        minutosDia = 0;
+                                    }
+                                    else if (horario.ingreso && horario.salida && horario.ingreso !== '00:00' && horario.salida !== '00:00') {
+                                        // 🆕 CALCULAR PARA OTROS ESTADOS CON HORARIOS
+                                        const [horaIng, minIng] = horario.ingreso.split(':').map(Number);
+                                        const [horaSal, minSal] = horario.salida.split(':').map(Number);
+
+                                        minutosDia = (horaSal * 60 + minSal) - (horaIng * 60 + minIng);
+
+                                        // Aplicar refrigerio si > 6 horas
+                                        if (minutosDia > 360) {
+                                            minutosDia -= 60;
+                                        }
+                                    }
                                     return (
                                         <div key={index} className="p-2 border rounded">
                                             <p className='flex gap-3 items-center'>
-                                                {`${format(horario.fecha, 'd/MM/yyyy  ')} - ${horario.ingreso} a ${horario.salida} `}
-                                                <Badge variant={badgeConfig.variant}> {badgeConfig.label} </Badge>
+                                                {`${format(horario.fecha, 'd/MM/yyyy')} - ${horario.ingreso} a ${horario.salida}`}
+                                                <span className="text-green-600 font-mono">
+                                                    ({formatMinutes(minutosDia)}) {/* 🆕 USAR CÁLCULO FRONTEND */}
+                                                </span>
+                                                <Badge variant={badgeConfig.variant}>{badgeConfig.label}</Badge>
                                             </p>
                                         </div>
                                     );
@@ -101,9 +134,14 @@ export default function SearchHorario({ permisoId, jornada }: { permisoId: numbe
                                 <p className='text-teal-400 font-mono text-lg'> Horas laborales: {formatMinutes(dataExtra.laboral)} </p>
                                 <p className='text-lime-400 border rounded-xl p-2 flex flex-col gap-1 font-mono text-lg'>
                                     <span>Horario en sobretiempo:</span>
-                                     {`${format(dataExtra.horarioExtra.fecha, 'd/MM/yyyy  ')} - ${dataExtra.horarioExtra.ingreso} a ${dataExtra.horarioExtra.salida} `}
+                                    {`${format(dataExtra.horarioExtra.fecha, 'd/MM/yyyy  ')} - ${dataExtra.horarioExtra.ingreso} a ${dataExtra.horarioExtra.salida} `}
                                 </p>
+
+
                                 <p className='text-red-400 font-mono text-lg'>Tiempo extra: {formatMinutes(dataExtra.extra)}</p>
+ {/*
+                                 */}
+
                             </>
                         ) : (
                             <p>No hay horarios registrados.</p>

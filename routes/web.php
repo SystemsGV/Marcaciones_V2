@@ -8,13 +8,14 @@ use App\Http\Controllers\EmpresaController;
 use App\Http\Controllers\HorarioController;
 use App\Http\Controllers\MarcacionController;
 use App\Http\Controllers\MemorandumController;
+use App\Http\Controllers\MovimientoController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PermisoController;
 use App\Http\Controllers\ReporteController;
 use App\Http\Controllers\Settings\ProfileController;
+use App\Http\Controllers\SolicitudHorasExtrasPTController;
 use App\Http\Controllers\SuspensionController;
 use App\Http\Controllers\UsuarioController;
-use App\Http\Controllers\MovimientoController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -27,13 +28,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Empleados
     Route::resource('empleados', EmpleadoController::class)->except(['show']);
+
     Route::post('empleados/download', [EmpleadoController::class, 'download'])->name('empleados.download');
+
+    Route::post('empleados/download-cesados', [EmpleadoController::class, 'downloadCesados'])->name('empleados.download-cesados');
 
     Route::get('/empleados/{id}/modal', [EmpleadoController::class, 'mostrarEmpleadoModal'])
         ->name('empleados.modal');
 
-
-    //movimientos
+    // movimientos
     /*
         incluso si no rendiriza una vista, necesito definir la ruta en web.php
         1. la ruta desde la cual viene la peticion
@@ -43,7 +46,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/movimiento/toggle', [MovimientoController::class, 'toggleEstadoInertia'])
         ->name('movimiento.toggle');
 
+    Route::post('/movimiento/toggle_usuarios', [MovimientoController::class, 'toggleEstadoUsuariosInertia'])
+        ->name('movimiento.toggle_usuarios');
 
+    Route::get('/movimientos', [MovimientoController::class, 'indexInertia'])->name('movimientos.index');
 
     // Areas
     Route::resource('areas', AreaController::class)->except(['show']);
@@ -56,6 +62,38 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Horarios
     Route::resource('horarios', HorarioController::class)->except(['show', 'destroy']);
 
+    Route::get('/horarios/nuevo2', [HorarioController::class, 'create_2'])->name('horarios.create-2');
+
+    Route::get('/horarios/nuevo', [HorarioController::class, 'create'])->name('horarios.create');
+
+    Route::get('/horarios/empleados-por-empresa', [HorarioController::class, 'empleadosPorEmpresa'])
+        ->name('horarios.empleadosPorEmpresa');
+
+    Route::get('/horarios/empleados', [HorarioController::class, 'empleados'])
+        ->name('horarios.empleados');
+
+    Route::post('/horarios/store-multiple', [HorarioController::class, 'storeMultiple'])->name('horarios.store-multiple');
+
+    Route::get('/horarios/getFeriadosEmpleado', [HorarioController::class, 'getFeriadosEmpleado'])->name('horarios.getFeriadosEmpleado');
+
+    Route::get('/horarios/getTDDisponibles', [HorarioController::class, 'getTDDisponibles'])
+        ->name('horarios.getTDDisponibles');
+
+    Route::get('empleados/empleado/{id}', [HorarioController::class, 'empleado'])
+        ->name('empleados.empleado');
+
+    Route::get('/horarios/getHorasMensualesPT', [
+        HorarioController::class,
+        'getHorasMensualesPT',
+    ])
+        ->name('horarios.getHorasMensualesPT');
+
+    Route::get('/horarios/getWeekSchedules', [HorarioController::class, 'getWeekSchedules'])
+        ->name('horarios.getWeekSchedules');
+
+    // feriados
+    // Route::get('/horarios/nuevo', HorarioController::class ()
+
     // Permisos
     Route::resource('permisos', PermisoController::class)->except(['show']);
     Route::group(['prefix' => 'permisos', 'as' => 'permisos.'], function () {
@@ -63,21 +101,42 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('{permiso}/horarios', [PermisoController::class, 'showHorarios'])->name('showHorarios');
         Route::get('{permiso}/imprimir', [PermisoController::class, 'imprimir'])->name('imprimir');
         Route::post('{permiso}/upload', [PermisoController::class, 'upload'])->name('upload');
+
+        Route::get('gerencia', [PermisoController::class, 'index_gerencia'])->name('index_gerencia');
+        Route::get('rrhh', [PermisoController::class, 'index_rrhh'])->name('index_rrhh');
     });
 
     // Marcaciones
     Route::resource('marcaciones', MarcacionController::class)->except(['show']);
+
     Route::group(['prefix' => 'marcaciones', 'as' => 'marcaciones.'], function () {
+
+        Route::get('{empleado}/feriados', [MarcacionController::class, 'getFeriadosDisponibles'])->name('feriados');
+
         Route::get('reales', [MarcacionController::class, 'real'])->name('reales');
+
+        Route::get('reales/miluska', [MarcacionController::class, 'realMiluska'])->name('reales.miluska');
+
         Route::get('ediciones', [MarcacionController::class, 'edicion'])->name('ediciones');
+
         Route::post('download', [MarcacionController::class, 'download'])->name('download');
+
         Route::post('{marcacion}/upload', [MarcacionController::class, 'upload'])->name('upload');
+
         Route::post('pull', [MarcacionController::class, 'pull'])->name('pull');
+
+        Route::get('{empleado}/extras', [MarcacionController::class, 'getHorasExtraDisponibles'])->name('extras');
+
+        Route::post('recalcular-extras', [MarcacionController::class, 'recalcularExtras'])->name('recalcular-extras');
     });
+
+    Route::post('/marcaciones/compensar-dia', [MarcacionController::class, 'storeCompensarDia'])
+    ->name('marcaciones.compensarDiaStore');
 
     // Asistencias
     Route::resource('asistencias', AsistenciaController::class);
     Route::post('asistencias/{asistenciaDetalle}/horas-extra/', [AsistenciaController::class, 'updateHorasExtra'])->name('asistencias.horasExtra');
+    Route::get('asistencias/miluska', [AsistenciaController::class, 'indexMiluska'])->name('asistencias.miluska');
 
     // Memorandums
     Route::resource('memorandums', MemorandumController::class)->except(['show']);
@@ -106,7 +165,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('compensas/download', [ReporteController::class, 'compensaDownload'])->name('compensas.download');
 
         Route::get('horas-extra', [ReporteController::class, 'extraIndex'])->name('extras.index');
+
         Route::post('horas-extra/download', [ReporteController::class, 'extraDownload'])->name('extras.download');
+
+        Route::get('extra-detalle', [ReporteController::class, 'extraDetalle'])->name('extraDetalle');
+
+        Route::get('reportes/extras/revision', [ReporteController::class, 'extraRevision']);
+
     });
 
     // Settings
@@ -126,6 +191,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
             return Inertia::render('settings/appearance');
         })->name('appearance');
     });
+
+    // SOLICITUDES PT
+    Route::patch('/solicitudes-he-pt/{solicitud}/aprobar', [SolicitudHorasExtrasPTController::class, 'aprobar'])->name('solicitudes-he-pt.aprobar');
+
+    Route::delete('/solicitudes-he-pt/{solicitud}/rechazar', [SolicitudHorasExtrasPTController::class, 'rechazar'])->name('solicitudes-he-pt.rechazar');
+
+    Route::get('/solicitudes-he-pt/{solicitud}/detalle', [SolicitudHorasExtrasPTController::class, 'showDetalleSolicitud'])->name('solicitudes-he-pt.detalle');
+
+    Route::get('/solicitudes-he-pt/rrhh', [SolicitudHorasExtrasPTController::class, 'indexRRHH'])->name('solicitudes-he-pt.rrhh');
+
+    Route::get('/enviar-acumulada', [SolicitudHorasExtrasPTController::class, 'enviarTodaLasSolicitudes'])->name('solicitudes-enviar-acumulada');
+
+    // reportes
+    Route::get('reportes/extras/revision', [ReporteController::class, 'extraRevision']);
 });
 
-require __DIR__ . '/auth.php';
+// routes/web.php
+
+require __DIR__.'/auth.php';

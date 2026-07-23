@@ -20,6 +20,10 @@ $estado = [
     'PE' => ['label' => 'PENDIENTE'],
     'HENA' => ['label' => 'H. EXTRA NO AUTORIZADO'],
     'ANTICIPADO' => ['label' => 'PENDIENTE'],
+	'ST' => ['label' => 'S. TARDANZA'],
+	'SN' => ['label' => 'S. NEGLIGENCIA'],
+	'SFI' => ['label' => 'S. FALTA INJ.'],
+    'TD' => ['label' => 'TRABAJO DIA DESCANSO.'],
     '' => ['label' => 'NO REGISTRADO'],
 ];
 @endphp

@@ -35,7 +35,7 @@ type Filters = {
     fechaFin?: string;
 };
 
-export default function IndexMemorandum({ memorandums, empresas, filters } : { memorandums : Memorandum[]; empresas: Empresa[]; filters: Filters }) {
+export default function IndexMemorandum({ memorandums, empresas, filters }: { memorandums: Memorandum[]; empresas: Empresa[]; filters: Filters }) {
     const { auth } = usePage<SharedData>().props;
 
     // valores iniciales
@@ -45,14 +45,14 @@ export default function IndexMemorandum({ memorandums, empresas, filters } : { m
         dateRange:
             filters?.fechaInicio && filters?.fechaFin
                 ? {
-                      from: parseISO(filters.fechaInicio),
-                      to: parseISO(filters.fechaFin),
-                  }
+                    from: parseISO(filters.fechaInicio),
+                    to: parseISO(filters.fechaFin),
+                }
                 : undefined,
     };
 
     const [selectedEmpresa, setSelectedEmpresa] = useState<string | number | null>(initialState.empresa);
-    const [selectedTipo, setSelectedTipo] = useState<string >(initialState.tipo);
+    const [selectedTipo, setSelectedTipo] = useState<string>(initialState.tipo);
     const [dateRange, setDateRange] = useState<DateRange | undefined>(initialState.dateRange);
     const [isFiltering, setIsFiltering] = useState(false);
 
@@ -73,6 +73,13 @@ export default function IndexMemorandum({ memorandums, empresas, filters } : { m
         );
     }, [selectedEmpresa, selectedTipo, dateRange]);
 
+    useEffect(() => {
+        // Si es MILUSKA y no hay empresa seleccionada pero hay empresas disponibles
+        if (auth.user.id === 73 && !selectedEmpresa && empresas.length > 0) {
+            setSelectedEmpresa(empresas[0].id);
+        }
+    }, [empresas, selectedEmpresa, auth.user.name]);
+
     // carga automatica en tiempo real
     useEffect(() => {
         if (selectedEmpresa && selectedTipo && dateRange?.to) {
@@ -81,6 +88,13 @@ export default function IndexMemorandum({ memorandums, empresas, filters } : { m
             return () => clearTimeout(timer);
         }
     }, [selectedEmpresa, selectedTipo, dateRange, applyFilters]);
+
+    useEffect(() => {
+        // Si es MILUSKA y no hay empresa seleccionada pero hay empresas disponibles
+        if (auth.user.name === 'ANGELES TERRONES MILUSKA' && !selectedEmpresa && empresas.length > 0) {
+            setSelectedEmpresa(empresas[0].id);
+        }
+    }, [empresas, selectedEmpresa, auth.user.name]);
 
     // Componente para mostrar cuando no hay filtros
     const NoFiltersMessage = () => (
@@ -130,6 +144,29 @@ export default function IndexMemorandum({ memorandums, empresas, filters } : { m
                                     placeholder="SELECCIONAR EMPRESA"
                                 />
                             )}
+
+                            {auth.user.name === 'ANGELES TERRONES MILUSKA' && (
+                                <SelectFilter
+                                    items={empresas}
+                                    selected={selectedEmpresa}
+                                    onSelect={setSelectedEmpresa}
+                                    getValue={(empresa) => empresa.id}
+                                    displayValue={(empresa) => empresa.razonsocial}
+                                    placeholder="SELECCIONAR EMPRESA"
+                                />
+                            )}
+
+                             {auth.user.id === 73 && (
+                                <SelectFilter
+                                    items={empresas}
+                                    selected={selectedEmpresa}
+                                    onSelect={setSelectedEmpresa}
+                                    getValue={(empresa) => empresa.id}
+                                    displayValue={(empresa) => empresa.razonsocial}
+                                    placeholder="SELECCIONAR EMPRESA"
+                                />
+                            )}
+
 
                             <DateRangeFilter
                                 dateRange={dateRange}

@@ -39,7 +39,7 @@ type Filters = {
     fechaFin?: string;
 };
 
-interface Pendiente{
+interface Pendiente {
     id: number
     empleado: string
     dni: string
@@ -52,7 +52,7 @@ interface Pendiente{
         nombre: string;
     }[]
     permisos_td: {
-        fecha:string
+        fecha: string
     }[]
 }
 
@@ -63,13 +63,17 @@ export default function IndexReporteCompensas({
     empresas,
     encargados,
     filters,
+    compensas_TD,
+    permisos_td
 }: {
     pendientes: Pendiente[];
     compensas: Permiso[];
     compensas_adelantadas: Permiso[];
+
     empresas: Empresa[];
     encargados: Encargado[];
     filters: Filters;
+    compensas_TD: Permiso[];
 }) {
     const { auth } = usePage<SharedData>().props;
 
@@ -80,9 +84,9 @@ export default function IndexReporteCompensas({
         dateRange:
             filters?.fechaInicio && filters?.fechaFin
                 ? {
-                      from: parseISO(filters.fechaInicio),
-                      to: parseISO(filters.fechaFin),
-                  }
+                    from: parseISO(filters.fechaInicio),
+                    to: parseISO(filters.fechaFin),
+                }
                 : undefined,
     };
 
@@ -113,7 +117,12 @@ export default function IndexReporteCompensas({
         setSelectedEmpresa(empresaId);
         setSelectedEncargado(null); // Resetear área al cambiar de empresa
     };
-
+     useEffect(() => {
+        // Si es MILUSKA y no hay empresa seleccionada pero hay empresas disponibles
+        if (auth.user.id === 73 && !selectedEmpresa && empresas.length > 0) {
+            setSelectedEmpresa(empresas[0].id);
+        }
+    }, [empresas, selectedEmpresa, auth.user.name]);
     // carga automatica en tiempo real
     useEffect(() => {
         if ((selectedEmpresa && dateRange?.to) || selectedEncargado) {
@@ -122,7 +131,12 @@ export default function IndexReporteCompensas({
             return () => clearTimeout(timer);
         }
     }, [selectedEmpresa, selectedEncargado, dateRange, applyFilters]);
-
+    useEffect(() => {
+        // Si es MILUSKA y no hay empresa seleccionada pero hay empresas disponibles
+        if (auth.user.name === 'ANGELES TERRONES MILUSKA' && !selectedEmpresa && empresas.length > 0) {
+            setSelectedEmpresa(empresas[0].id);
+        }
+    }, [empresas, selectedEmpresa, auth.user.name]);
     // Componente para mostrar cuando no hay filtros
     const NoFiltersMessage = () => (
         <div className="flex flex-col items-center justify-center p-8">
@@ -183,6 +197,27 @@ export default function IndexReporteCompensas({
                                 />
                             )}
 
+                            {auth.user.name === 'ANGELES TERRONES MILUSKA' && (
+                                <SelectFilter
+                                    items={empresas}
+                                    selected={selectedEmpresa}
+                                    onSelect={setSelectedEmpresa}
+                                    getValue={(empresa) => empresa.id}
+                                    displayValue={(empresa) => empresa.razonsocial}
+                                    placeholder="SELECCIONAR EMPRESA"
+                                />
+                            )}
+                               {auth.user.id === 73 && (
+                                <SelectFilter
+                                    items={empresas}
+                                    selected={selectedEmpresa}
+                                    onSelect={setSelectedEmpresa}
+                                    getValue={(empresa) => empresa.id}
+                                    displayValue={(empresa) => empresa.razonsocial}
+                                    placeholder="SELECCIONAR EMPRESA"
+                                />
+                            )}
+
                             <DateRangeFilter
                                 dateRange={dateRange}
                                 setDateRange={setDateRange}
@@ -217,7 +252,7 @@ export default function IndexReporteCompensas({
                                     ) : isFiltering ? (
                                         <LoadingSkeleton />
                                     ) : (
-                                        <DataTable key="datatable-reporte-compensas" columns={columnsPendientes} data={pendientes} />
+                                        <DataTable key="datatable-reporte-compensas" columns={columnsPendientes} data={pendientes}   />
                                     )}
                                 </TabsContent>
 
@@ -227,7 +262,7 @@ export default function IndexReporteCompensas({
                                     ) : isFiltering ? (
                                         <LoadingSkeleton />
                                     ) : (
-                                        <DataTable key="datatable-reporte-compensas" columns={columns} data={compensas} />
+                                        <DataTable key="datatable-reporte-compensas" columns={columns}  data={compensas} />
                                     )}
                                 </TabsContent>
 

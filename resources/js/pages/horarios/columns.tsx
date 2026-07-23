@@ -9,35 +9,46 @@ import { format, isAfter, isSameWeek, startOfWeek } from 'date-fns';
 import { ArrowUpDown, SquarePen } from 'lucide-react';
 
 
+
+
 const estadoBadgeVariants = {
-    L: { label: 'LABORAL', variant: 'success' },
-    D: { label: 'DESCANSO', variant: 'info' },
-    C: { label: 'COMPENSACION', variant: 'info' },
-    CA: { label: 'COMP. ADELANTADA', variant: 'info' },
-    CHE: { label: 'COMPENSA HE', variant: 'info' },
-    F: { label: 'FERIADO', variant: 'warning' },
-    FL: { label: 'FER. LABORAL', variant: 'warning' },
-    SP: { label: 'SIN PROGRAMACION', variant: 'destructive' },
-    V: { label: 'VACACIONES', variant: 'info' },
-    M: { label: 'D. MEDICO', variant: 'warning' },
-    S: { label: 'SUSPENSION', variant: 'destructive' },
-    SN: { label: 'S. NEGLIGENCIA', variant: 'destructive' },
-    SFI: { label: 'S. FALTA INJ.', variant: 'destructive' },
-    ST: { label: 'S. TARDANZA', variant: 'destructive' },
-    FI: { label: 'F. INJUSTIFICADA', variant: 'destructive' },
-    FJ: { label: 'F. JUSTIFICADA', variant: 'destructive' },
-    LCG: { label: 'L. CON GOCE', variant: 'info' },
-    LSG: { label: 'L. SIN GOCE', variant: 'info' },
-    LP: { label: 'L. PATERNIDAD', variant: 'info' },
-    LM: { label: 'L. MATERNIDAD', variant: 'info' },
-    LF: { label: 'L. FALLECIMIENTO', variant: 'info' },
-    PE: { label: 'PENDIENTE', variant: 'warning' },
-    HENA: { label: 'H. EXTRA NO AUTORIZADO', variant: 'destructive' },
-    AHE: { label: 'HORAS EXTRA', variant: 'info' },
-    TD: { label: 'TRABAJÓ DIA DE DESCANSO', variant: 'info'}
+    L: { label: '1.LABORAL', variant: 'success' },
+    D: { label: '2.DESCANSO SEMANAL', variant: 'info' },
+    C: { label: '3.COMPENSACION', variant: 'info' },
+    CA: { label: '4.COMPENSACION ADELANTADA', variant: 'info' },
+    CHE: { label: '5.COMPENSA HORAS EXTRAS', variant: 'info' },
+    F: { label: '6.FERIADO', variant: 'warning' },
+    FL: { label: '7.FERIADO LABORADO', variant: 'warning' },
+    SP: { label: '8.SIN PROGRAMACION', variant: 'destructive' },
+    V: { label: '9.VACACIONES', variant: 'info' },
+    M: { label: '10.DESCANSO MEDICO', variant: 'warning' },
+    SN: { label: '11.SUSPENSIÓN POR NEGLIGENCIA', variant: 'destructive' },
+    ST: { label: '12.SUSP. POR ACUMULACION DE AMONESTACIONES', variant: 'destructive' },
+    SFI: { label: '13.SUSP. POR FALTA INJUSTIFICADA', variant: 'destructive' },
+    FI: { label: '14.FALTA INJUSTIFICADA', variant: 'destructive' },
+    FJ: { label: '15.FALTA JUSTIFICADA', variant: 'destructive' },
+    LCG: { label: '16.LICENCIA CON GOCE DE HABER', variant: 'info' },
+    LSG: { label: '17.LICENCIA SIN GOCE DE HABER', variant: 'info' },
+    LP: { label: '18.LICENCIA POR PATERNIDAD', variant: 'info' },
+    LM: { label: '19.LICENCIA POR MATERNIDAD', variant: 'info' },
+    LF: { label: '20.LICENCIA POR FALLECIMIENTO', variant: 'info' },
+    PE: { label: '21.PENDIENTE', variant: 'warning' },
+    HENA: { label: '22.H. EXTRA NO AUTORIZADO', variant: 'destructive' },
+    HE: { label: '23.HORAS EXTRA', variant: 'info' },
+    TD: { label: '24.TRABAJO DIA DESCANSO', variant: 'info' },
+
+    AS: { label: '25.APRB. SISTEMA', variant: 'destructive' },
+    AU: { label: '26.APRB. USER', variant: 'success' },
+    RU: { label: '27.RECHAZ. USER', variant: 'destructive' },
+    RS: { label: '28.RECHAZ. SISTEMA', variant: 'success' },
+
 } as const;
 
-export const columns: ColumnDef<Horario>[] = [
+
+
+export const columns = (auth: any): ColumnDef<Horario>[] => [
+
+
     {
         accessorKey: 'id',
         header: 'CODIGO',
@@ -124,15 +135,30 @@ export const columns: ColumnDef<Horario>[] = [
         cell: ({ row }) => {
             const horario = row.original;
 
-            return (horario.estado !== 'PE' && horario.validado == 0 &&  (
+            // 🔥 ROLES QUE PUEDEN EDITAR TODO
+            const rolesLibres = [1, 2]; // ADMIN (1) y RRHH (2)
+            const esAdminRRHH = rolesLibres.includes(auth.user.rol_id);
+
+            // 🔥 REGLAS:
+            // 1. Si es ADMIN o RRHH → PUEDE EDITAR TODO (incluso PE y validados)
+            // 2. Si no es ADMIN/RRHH → solo editar si: estado !== 'PE' Y validado == 0
+            const puedeEditar = esAdminRRHH
+                ? true // Admin/RRHH editan todo
+                : (horario.estado !== 'PE' && horario.validado == 0); // Otros roles con reglas
+
+            if (!puedeEditar) {
+                return null; // No mostrar botón
+            }
+
+            return (
                 <div className="flex items-center gap-2">
                     <Button asChild key={`edit-horario-${horario.id}`} size="sm">
                         <Link href={route('horarios.edit', horario.id)}>
                             <SquarePen />
                         </Link>
                     </Button>
-                </div>)
+                </div>
             );
         },
-    },
+    }
 ];

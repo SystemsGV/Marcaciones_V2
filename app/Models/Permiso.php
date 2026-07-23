@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Permiso extends Model
 {
@@ -17,6 +17,7 @@ class Permiso extends Model
         'comprobante',
         'estado',
         'estado_print',
+        'permiso_HE_PT',
     ];
 
     protected function casts(): array
@@ -31,12 +32,24 @@ class Permiso extends Model
 
     public function empleado(): BelongsTo
     {
-      return $this->belongsTo(Empleado::class);
+        return $this->belongsTo(Empleado::class);
+    }
+
+    public function horario()
+    {
+        // Relación al horario del mismo día que el permiso
+        return $this->hasOne(Horario::class, 'empleado_id', 'empleado_id')
+            ->whereColumn('fecha', 'permisos.fecha');
     }
 
     public function tipo(): BelongsTo
     {
-      return $this->belongsTo(PermisoTipo::class, 'tipo_id');
+        return $this->belongsTo(PermisoTipo::class, 'tipo_id');
     }
 
+    public function marcacion(): HasOne
+    {
+        return $this->hasOne(Marcacion::class, 'empleado_id', 'empleado_id')
+            ->whereColumn('marcaciones.fecha', 'permisos.fecha');
+    }
 }

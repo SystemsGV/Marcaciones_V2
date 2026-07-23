@@ -6,13 +6,42 @@ import { ArrowUpDown } from 'lucide-react';
 import { ReporteTareo } from '@/types/reporte-tareo';
 
 const formatMinutes = (minutes: number | false): string => {
-  if (typeof minutes !== 'number') return '-';
+    if (typeof minutes !== 'number') return '-';
 
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
 
-  return `${String(hours).padStart(2, '0')}:${String(remainingMinutes).padStart(2, '0')}`;
+    return `${String(hours).padStart(2, '0')}:${String(remainingMinutes).padStart(2, '0')}`;
 };
+
+const parseTimeToMinutes = (time: string | null | undefined): number | null => {
+    if (!time) return null;
+    const parts = String(time).split(':');
+    if (parts.length < 2) return null;
+    const hh = parseInt(parts[0], 10);
+    const mm = parseInt(parts[1], 10);
+    if (Number.isNaN(hh) || Number.isNaN(mm)) return null;
+    return hh * 60 + mm;
+};
+const diffMinutes = (start: string, end: string): number | null => {
+    if (!start || !end) return null;
+
+    const [startH, startM] = start.split(':').map(Number);
+    const [endH, endM] = end.split(':').map(Number);
+
+    if (isNaN(startH) || isNaN(startM) || isNaN(endH) || isNaN(endM)) return null;
+
+    const startMinutes = startH * 60 + startM;
+    const endMinutes = endH * 60 + endM;
+
+    // Si end < start, asume que cruzó medianoche
+    if (endMinutes < startMinutes) {
+        return (endMinutes + 24 * 60) - startMinutes;
+    }
+
+    return endMinutes - startMinutes;
+};
+
 
 export const columns: ColumnDef<ReporteTareo>[] = [
     {
@@ -50,43 +79,109 @@ export const columns: ColumnDef<ReporteTareo>[] = [
         cell: ({ row }) => `${row.original.empleado.apellidos} ${row.original.empleado.nombres}`
     },
     {
-        accessorKey: 'horas_laboradas', // horas totales trabajadas
+        accessorKey: 'horasLaboradas', // Debe coincidir con el nombre que pusimos en el return del Controller
         header: 'HORAS LABORADAS',
         cell: ({ row }) => {
-            const horas = row.original.horasLaboradas;
-            return (<span className={'text-teal-700 font-semibold'}> {formatMinutes(horas)} </span>)
-        }
-    },
-    {
-        accessorKey: 'horas_trabajadas', // horas totales trabajadas
-        header: 'HORAS TRABAJADAS',
-        cell: ({ row }) => {
-            const horas = row.original.horas;
+            // Traemos el valor que ya viene calculado en minutos desde el Backend
+            const minutos = row.original.horasLaboradas || 0;
 
-            return (<span className={'text-violet-600 font-semibold'}> {formatMinutes(horas)} </span>)
-        }
-    },
-    {
-        accessorKey: 'excedente', // excendente pasando las 23:30 semanales
-        header: 'EXCEDENTE',
-        cell: ({ row }) => {
-            const excedente = row.original.horasExcedente;
+            // Función interna rápida para formatear HH:mm
+            const h = Math.floor(minutos / 60);
+            const m = minutos % 60;
+            const formatted = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+
             return (
-                <span className={excedente > 0 ? "text-red-600" : 'text-blue-600'} >
-                    {formatMinutes(excedente > 0 ? excedente : 0)}
+                <span className="text-teal-700 font-bold">
+                    {formatted}
                 </span>
             );
-
         }
     },
     {
-        accessorKey: 'tardanza', // tardanza
+        accessorKey: 'horas_trabajadas_reales', // Cambiamos el accessor
+        header: 'HORAS TRABAJADAS',
+        cell: ({ row }) => {
+            // Ahora usamos horasTrabajadasReales que es el campo correcto
+            const totalMinutos = row.original.horasTrabajadasReales || 0;
+
+            const formatHoras = (minutos: number) => {
+                const h = Math.floor(Math.abs(minutos) / 60);
+                const m = Math.abs(minutos) % 60;
+                return `${minutos < 0 ? '-' : ''}${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+            };
+
+            return (
+                <span className="text-violet-600 font-semibold">
+                    {formatHoras(totalMinutos)}
+                </span>
+            );
+        }
+    },
+    // {
+    //     accessorKey: 'horasExcedente',
+    //     header: 'EXCEDENTE',
+    //     cell: ({ row }) => {
+    //         const totalMinutos = parseInt(row.original.horasExcedente) || 0;
+
+    //         const esNegativo = totalMinutos < 0;
+    //         const absMinutos = Math.abs(totalMinutos);
+
+    //         const h = Math.floor(absMinutos / 60);
+    //         const m = absMinutos % 60;
+
+    //         const formatted = `${esNegativo ? '-' : ''}${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+
+    //         return (
+    //             <span className={totalMinutos > 0 ? "text-green-600 font-bold" : "text-red-500"}>
+    //                 {formatted}
+    //             </span>
+    //         );
+    //     }
+
+    // },
+    {
+        accessorKey: 'horasExcedente',
+        header: 'EXCEDENTE',
+        cell: ({ row }) => {
+            const totalMinutos = parseInt(row.original.horasExcedente) || 0;
+
+            const esNegativo = totalMinutos < 0;
+            const absMinutos = Math.abs(totalMinutos);
+
+            const h = Math.floor(absMinutos / 60);
+            const m = absMinutos % 60;
+
+            const formatted = `${esNegativo ? '-' : ''}${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+
+            // Definir color según el valor
+            let colorClass = "text-gray-400"; // Neutro para 00:00
+            if (totalMinutos > 0) colorClass = "text-green-600 font-bold";
+            if (totalMinutos < 0) colorClass = "text-red-500 font-bold";
+
+            return (
+                <span className={colorClass}>
+                    {formatted}
+                </span>
+            );
+        }
+    },
+    {
+        accessorKey: 'tardanza',
         header: 'TARDANZA',
         cell: ({ row }) => {
             const tardanza = row.original.tardanza;
-            return (<span className={tardanza ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}> {formatMinutes(tardanza)} </span>)
+
+            // 9h 16m = 556 minutos
+            const minutosFake = tardanza === 556 ? 0 : tardanza;
+
+            return (
+                <span className={minutosFake > 0 ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}>
+                    {formatMinutes(minutosFake)}
+                </span>
+            );
         }
     },
+
     {
         accessorKey: 'anticipado', // hora antes de su salida programada (horario)
         header: 'ANTICIPADO',
@@ -119,6 +214,23 @@ export const columns: ColumnDef<ReporteTareo>[] = [
         cell: ({ row }) => {
             const compensa = row.original.compensa_pendiente;
             return (<span className={compensa > 0 ? 'text-red-600' : 'text-teal-600'}>{compensa}</span>)
+        }
+    },
+    {
+        accessorKey: 'compensa_horas',
+        header: 'COMPENSA',
+        cell: ({ row }) => {
+            const minutos = row.original.compensa_horas_totales || 0;
+            const esPartTime = row.original.empleado.jornada_id === 2;
+
+            if (!esPartTime || minutos === 0) return <span className="text-gray-400">—</span>;
+
+            // Usamos tu función formatMinutes que ya tienes definida
+            return (
+                <span className="text-blue-600 font-bold">
+                    {formatMinutes(minutos)}
+                </span>
+            );
         }
     },
     {
@@ -215,5 +327,45 @@ export const columns: ColumnDef<ReporteTareo>[] = [
         accessorKey: 'descuento',
         header: 'DESCUENTO',
         cell: ({ row }) => <span className={row.original.descuento > 0 ? 'text-red-600 font-semibold' : 'text-green-600 font-semibold'}>{row.original.descuento}</span>
+    },
+
+    // Agregar después de la columna EXCEDENTE
+    {
+        accessorKey: 'hept_horas',
+        header: 'HE/PT APROBADO',
+        cell: ({ row }) => {
+            const horas = row.original.hept_horas || 0;
+            const aprobador = row.original.hept_aprobador;
+
+            // Determinar color según aprobador
+            let colorClass = '';
+            if (aprobador === 'SISTEMA') {
+                colorClass = 'text-blue-600 font-semibold';
+            } else if (aprobador && aprobador.includes('RECHAZADO')) {
+                colorClass = 'text-red-600 font-semibold line-through';
+            } else if (aprobador) {
+                colorClass = 'text-green-600 font-semibold';
+            } else {
+                colorClass = 'text-gray-500';
+            }
+
+            // Formatear el texto a mostrar
+            let texto = formatMinutes(horas);
+            if (aprobador) {
+                const aprobadorCorto = aprobador === 'SISTEMA' ? ' (SIST)' : ` (${aprobador.split(' ')[0]})`;
+                texto += aprobadorCorto;
+            }
+
+            return (
+                <div className={colorClass}>
+                    {horas > 0 ? texto : '-'}
+                    {row.original.hept_detalle && row.original.hept_detalle.length > 1 && (
+                        <span className="text-xs text-gray-400 ml-1">
+                            [+{row.original.hept_detalle.length - 1}]
+                        </span>
+                    )}
+                </div>
+            );
+        }
     },
 ];

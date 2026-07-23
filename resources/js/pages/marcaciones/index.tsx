@@ -18,6 +18,7 @@ import DownloadMarcacion from './download';
 import { DataTable, DataTableRef } from './data-table';
 import PullMarcacion from './pull';
 import { Card, CardContent } from '@/components/ui/card';
+import { RecalcularButton } from './recalcular-button'; // Agregar import
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -33,7 +34,7 @@ type Filters = {
     fechaFin?: string;
 };
 
-export default function IndexMarcacion({ marcaciones, empresas, encargados, filters }:{ marcaciones: Marcacion[]; empresas: Empresa[]; encargados: Encargado[]; filters: Filters }) {
+export default function IndexMarcacion({ marcaciones, empresas, encargados, filters }: { marcaciones: Marcacion[]; empresas: Empresa[]; encargados: Encargado[]; filters: Filters }) {
     const { auth } = usePage<SharedData>().props;
     const dataTableRef = useRef<DataTableRef>(null);
 
@@ -44,9 +45,9 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
         dateRange:
             filters?.fechaInicio && filters?.fechaFin
                 ? {
-                      from: parseISO(filters.fechaInicio),
-                      to: parseISO(filters.fechaFin),
-                  }
+                    from: parseISO(filters.fechaInicio),
+                    to: parseISO(filters.fechaFin),
+                }
                 : undefined,
     };
 
@@ -74,7 +75,7 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
 
     // carga automatica en tiempo real
     useEffect(() => {
-        if(!selectedEmpresa || !dateRange?.to){
+        if (!selectedEmpresa || !dateRange?.to) {
             setSelectedEncargado(null);
         }
 
@@ -113,6 +114,48 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
     // Determinar si se deben mostrar los datos
     const showData = selectedEmpresa && dateRange?.from && dateRange?.to;
 
+
+    //console.log('=== DEBUG OPERACIONES ===');
+    //console.log('Total marcaciones:', marcaciones.length);
+
+    const marcacionesOperaciones = marcaciones.filter(m =>
+        m.empleado?.area_id === 2
+    );
+    //console.log('Marcaciones de OPERACIONES:', marcacionesOperaciones.length);
+
+    const marcacionesOperacionesSinHorario = marcacionesOperaciones.filter(m => !m.horario);
+    //console.log('Operaciones SIN horario:', marcacionesOperacionesSinHorario.length);
+
+    // Mostrar detalles de los empleados afectados
+    marcacionesOperacionesSinHorario.forEach(marcacion => {
+        console.log('Empleado sin horario:', {
+            id: marcacion.empleado?.id,
+            nombre: `${marcacion.empleado?.nombres} ${marcacion.empleado?.apellidos}`,
+            area: marcacion.empleado?.area?.nombre,
+            jornada: marcacion.empleado?.jornada?.nombre,
+            fecha: marcacion.fecha
+        });
+    });
+
+
+    const marcacionesFiltradas = marcaciones.filter((marcacion) => {
+        // Si por alguna razón no viene el empleado o su fecha de ingreso, lo dejamos pasar por seguridad
+        if (!marcacion.empleado || !marcacion.empleado.fecha_ingreso) {
+            return true;
+        }
+
+        // Comparamos el día de la fila contra la fecha de ingreso del trabajador
+        // Si la fecha de la marcación/asistencia es MENOR que su fecha de ingreso, la ELIMINAMOS (false)
+        if (marcacion.fecha < marcacion.empleado.fecha_ingreso) {
+            return false;
+        }
+
+        return true; // Si es igual o mayor, pasa limpio
+    });
+
+
+
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Marcaciones" />
@@ -129,6 +172,16 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
                                             getSelectedData={() => dataTableRef.current?.getSelectedData() || []}
                                             filters={initialState} />
                                         <DownloadMarcacion disabled={isFiltering} marcaciones={marcaciones} filters={initialState} />
+                                        {auth.user.rol_id === 1 && (
+                                            <RecalcularButton
+                                                empresa={selectedEmpresa as number}
+                                                fechaInicio={dateRange?.from?.toISOString().split('T')[0]}
+                                                fechaFin={dateRange?.to?.toISOString().split('T')[0]}
+                                                disabled={isFiltering}
+                                                empresas={empresas} // <--- ¡IMPORTANTE!
+                                            // encargados={encargados}
+                                            />
+                                        )}
                                     </>
                                 )}
 
@@ -163,6 +216,9 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
                                     placeholder="SELECCIONAR ENCARGADO"
                                 />
                             )}
+
+
+
                         </div>
                     </div>
                     <Card>
@@ -172,7 +228,10 @@ export default function IndexMarcacion({ marcaciones, empresas, encargados, filt
                             ) : isFiltering ? (
                                 <LoadingSkeleton />
                             ) : (
-                                <DataTable key="datatable-marcaciones" columns={columns} data={marcaciones} ref={dataTableRef} />
+                                <DataTable key="datatable-marcaciones" columns={columns} data={marcacionesFiltradas} ref={dataTableRef} filters={{
+                                    fechaInicio: filters.fechaInicio,
+                                    fechaFin: filters.fechaFin
+                                }} />
                             )}
                         </CardContent>
                     </Card>

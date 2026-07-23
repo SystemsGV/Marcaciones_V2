@@ -14,8 +14,9 @@
             <th>FECHA DE INGRESO</th>
             <th>AREA</th>
             <th>EMPLEADO</th>
+            <th>HORAS LABORADAS</th>
             <th>HORAS TRABAJADAS</th>
-            <th>EXCEDENTE</th>
+            <th>EXCEDENTE</th> <!-- ESTA COLUMNA -->
             <th>TARDANZA</th>
             <th>ANTICIPADO</th>
             <th>NOCTURNO</th>
@@ -29,6 +30,7 @@
             <th>DM</th>
             <th>VAC</th>
             <th>C</th>
+            <th>C/HR</th>
             <th>LCG</th>
             <th>LSG</th>
             <th>LP</th>
@@ -40,48 +42,136 @@
             <th>A</th>
             <th>TOTAL PAGO</th>
             <th>TOTAL 100%</th>
+            <th>HE/PT</th>
             <th>DESCUENTO</th>
         </tr>
     </thead>
     <tbody>
         @foreach ($items as $item)
             <tr>
-                <td> {{ $item->empleado->dni }} </td>
-                <td> {{ \Carbon\Carbon::parse($item->empleado->fecha_ingreso)->format('d/m/Y') }} </td>
-                <td> {{ $item->empleado->area->nombre }} </td>
-                <td> {{ $item->empleado->apellidos }} {{ $item->empleado->nombres }} </td>
-                <td> {{ sprintf('%02d:%02d', floor($item->horas / 60), $item->horas % 60 ) }} </td>
-                <td> {{ $item->horasExcedente > 0 ? sprintf('%02d:%02d', floor($item->horasExcedente / 60), $item->horasExcedente % 60 ) : '00:00' }} </td>
-                <td> {{ sprintf('%02d:%02d', floor($item->tardanza / 60), $item->tardanza % 60 ) }} </td>
-                <td> {{ sprintf('%02d:%02d', floor($item->anticipado / 60), $item->anticipado % 60 ) }} </td>
-                <td> {{ sprintf('%02d:%02d', floor($item->nocturno / 60), $item->nocturno % 60 ) }} </td>
-                <td> {{ sprintf('%02d:%02d', floor($item->extra_25 / 60), $item->extra_25 % 60 ) }} </td>
-                <td> {{ sprintf('%02d:%02d', floor($item->extra_35 / 60), $item->extra_35 % 60 ) }} </td>
-                <td> {{ $item->compensa_pendiente }} </td>
-                <td> {{ $item->falta_injustificada }} </td>
-                <td> {{ $item->falta_justificada }} </td>
-                <td> {{ $item->feriado }} </td>
-                <td> {{ $item->feriado_laboral }} </td>
-                <td> {{ $item->descanso_medico }} </td>
-                <td> {{ $item->vacaciones }} </td>
-                <td> {{ $item->compensa }} </td>
-                <td> {{ $item->licencia_con_goce }} </td>
-                <td> {{ $item->licencia_sin_goce }} </td>
-                <td> {{ $item->licencia_paternidad }} </td>
-                <td> {{ $item->licencia_maternidad }} </td>
-                <td> {{ $item->licencia_fallecimiento }} </td>
-                <td> {{ $item->sin_programacion }} </td>
-                <td> {{ $item->suspension }} </td>
-                <td> {{ $item->descanso }} </td>
-                <td> {{ $item->asistencia }} </td>
-                <td> {{ $item->total_pago }} </td>
-                <td> {{ $item->total_100 }} </td>
-                <td> {{ $item->descuento }} </td>
+                <td>{{ $item->empleado->dni }}</td>
+                <td>{{ \Carbon\Carbon::parse($item->empleado->fecha_ingreso)->format('d/m/Y') }}</td>
+                <td>{{ $item->empleado->area->nombre }}</td>
+                <td>{{ $item->empleado->apellidos }} {{ $item->empleado->nombres }}</td>
+
+                @php
+                    $format = function ($totalMinutos) {
+                        $mins = abs($totalMinutos);
+                        $h = floor($mins / 60);
+                        $m = $mins % 60;
+                        return sprintf('%02d:%02d', $h, $m);
+                    };
+                @endphp
+
+                {{-- 1. META PROGRAMADA --}}
+                <td>{{ $format($item['horasLaboradas'] ?? 0) }}</td>
+
+                {{-- 2. LO QUE MARCÓ EL RELOJ (Aquí estaba el lío) --}}
+                <td style="font-weight: bold; color: #7c3aed;">
+                    {{ $format($item['horasTrabajadasReales'] ?? 0) }}
+                </td>
+
+                {{-- 3. EXCEDENTE YA CALCULADO --}}
+                <td>
+                    {{ $format($item['horasExcedente'] ?? 0) }}
+                </td>
+                <!-- FIN DE COLUMNA FALTANTE -->
+
+                <td>{{ sprintf('%02d:%02d', floor($item->tardanza / 60), $item->tardanza % 60) }}</td>
+                <td>{{ sprintf('%02d:%02d', floor($item->anticipado / 60), $item->anticipado % 60) }}</td>
+                <td>{{ sprintf('%02d:%02d', floor($item->nocturno / 60), $item->nocturno % 60) }}</td>
+                <td>{{ sprintf('%02d:%02d', floor($item->extra_25 / 60), $item->extra_25 % 60) }}</td>
+                <td>{{ sprintf('%02d:%02d', floor($item->extra_35 / 60), $item->extra_35 % 60) }}</td>
+                <td>{{ $item->compensa_pendiente }}</td>
+                <td>{{ $item->falta_injustificada }}</td>
+                <td>{{ $item->falta_justificada }}</td>
+                <td>{{ $item->feriado }}</td>
+                <td>{{ $item->feriado_laboral }}</td>
+                <td>{{ $item->descanso_medico }}</td>
+                <td>{{ $item->vacaciones }}</td>
+                <td>{{ $item->compensa }}</td>
+                <td>
+                    @php
+                        $totalMinutos = 0;
+                        $empleado = $item->empleado;
+                        $esPartTime = $empleado->jornada_id == 2;
+                        $diasCompensa = $item->compensa_dias_total ?? 0;
+                        $horarios = $empleado->horarios ?? [];
+
+                        if (!$esPartTime || $diasCompensa == 0) {
+                            echo '<span class="text-gray-400">—</span>';
+                        } else {
+                            $parseTimeToMinutes = function ($time) {
+                                if (!$time) {
+                                    return null;
+                                }
+                                $parts = explode(':', $time);
+                                if (count($parts) < 2) {
+                                    return null;
+                                }
+                                return intval($parts[0]) * 60 + intval($parts[1]);
+                            };
+
+                            $diffMinutes = function ($startStr, $endStr) use ($parseTimeToMinutes) {
+                                $start = $parseTimeToMinutes($startStr);
+                                $end = $parseTimeToMinutes($endStr);
+                                if ($start === null || $end === null) {
+                                    return null;
+                                }
+                                return $end < $start ? $end + 1440 - $start : $end - $start;
+                            };
+
+                            $horariosCompensa = collect($horarios)->filter(fn($h) => $h->estado === 'C');
+
+                            foreach ($horariosCompensa as $horario) {
+                                $ingreso = $horario->ingreso ?? ($horario->entryTime ?? null);
+                                $salida = $horario->salida ?? ($horario->exitTime ?? null);
+
+                                if ($ingreso && $salida) {
+                                    $duracion = $diffMinutes($ingreso, $salida);
+                                    if ($duracion !== null) {
+                                        $minutosDia = $duracion;
+                                        if ($empleado->jornada_id == 2 && $minutosDia >= 360) {
+                                            $minutosDia -= 60;
+                                        }
+                                        $totalMinutos += $minutosDia;
+                                    }
+                                }
+                            }
+                            $horas = floor($totalMinutos / 60);
+                            $min = $totalMinutos % 60;
+                            echo sprintf('%02d:%02d', $horas, $min);
+                        }
+                    @endphp
+                </td>
+                <td>{{ $item->licencia_con_goce }}</td>
+                <td>{{ $item->licencia_sin_goce }}</td>
+                <td>{{ $item->licencia_paternidad }}</td>
+                <td>{{ $item->licencia_maternidad }}</td>
+                <td>{{ $item->licencia_fallecimiento }}</td>
+                <td>{{ $item->sin_programacion }}</td>
+                <td>{{ $item->suspension }}</td>
+                <td>{{ $item->descanso }}</td>
+                <td>{{ $item->asistencia }}</td>
+                <td>{{ $item->total_pago }}</td>
+                <td>{{ $item->total_100 }}</td>
+                <td>
+                    @if (isset($item->hept_horas) && $item->hept_horas > 0)
+                        {{ sprintf('%02d:%02d', floor($item->hept_horas / 60), $item->hept_horas % 60) }}
+                    @else
+                        00:00
+                    @endif
+                </td>
+                <td>{{ $item->descuento }}</td>
             </tr>
         @endforeach
 
-        <tr><td></td></tr>
-        <tr><td></td></tr>
+        <tr>
+            <td></td>
+        </tr>
+        <tr>
+            <td></td>
+        </tr>
         <tr>
             <td style="text-align: center; text-lg">LYENDA</td>
         </tr>

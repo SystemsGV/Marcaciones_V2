@@ -11,13 +11,13 @@ import DownloadEmpleado from "./download";
 import { router } from "@inertiajs/react";
 import ModalEmpleado from './deleteModal';
 
+
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: "Empleados",
         href: "/empleados",
     },
 ];
-
 export default function IndexEmpleado({
     empleados,
     filters,
@@ -68,12 +68,8 @@ export default function IndexEmpleado({
                                 </Link>
                             </Button>
 
-                            <DownloadEmpleado disabled={empleados.length <= 0} empleados={empleados} />
+                            <DownloadEmpleado disabled={empleados.length <= 0} empleados={empleados} cesado={cesado} />
                         </div>
-
-
-
-
                     </div>
 
                     <Card>

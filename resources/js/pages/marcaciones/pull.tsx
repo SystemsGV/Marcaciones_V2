@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 
 
 export default function PullMarcacion({ empresaId }: { empresaId: number | null }) {
+
     const fechaInput = useRef<HTMLInputElement>(null);
     const [open, setOpen] = useState(false);
 

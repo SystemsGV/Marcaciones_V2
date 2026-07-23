@@ -3,11 +3,10 @@
 namespace App\Models;
 
 use Carbon\Carbon;
+use Carbon\CarbonInterval;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Casts\Attribute;
-use Carbon\CarbonInterval;
-use Illuminate\Database\Eloquent\Builder;
 
 class AsistenciaDetalle extends Model
 {
@@ -50,12 +49,11 @@ class AsistenciaDetalle extends Model
 
     public function empleado(): BelongsTo
     {
-      return $this->belongsTo(Empleado::class);
+        return $this->belongsTo(Empleado::class);
     }
 
     public function asistencia(): BelongsTo
     {
-      return $this->belongsTo(Asistencia::class);
+        return $this->belongsTo(Asistencia::class);
     }
-
 }
